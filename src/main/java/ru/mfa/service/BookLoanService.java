@@ -1,72 +1,73 @@
 package ru.mfa.service;
 
-import ru.mfa.model.*;
-import ru.mfa.repository.InMemoryStorage;
+import ru.mfa.entity.*;
+import ru.mfa.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
-import java.util.Optional;
+import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class BookLoanService {
-    private final InMemoryStorage storage = InMemoryStorage.getInstance();
+
+    private final BookRepository bookRepository;
+    private final ReaderRepository readerRepository;
+    private final BookLoanRepository bookLoanRepository;
+    private final FineRepository fineRepository;
+
     private static final double FINE_PER_DAY = 10.0;
+    private static final int MAX_ACTIVE_LOANS = 5;
 
+    @Value("${library.fine.block-threshold:100}")
+    private double blockThreshold;
+
+    @Transactional
     public BookLoan borrowBook(Long bookId, Long readerId) {
-        if (!storage.existsBookById(bookId)) {
-            throw new RuntimeException("Книга не найдена");
-        }
-
-        Optional<Reader> readerOpt = storage.findReaderById(readerId);
-        if (readerOpt.isEmpty()) {
-            throw new RuntimeException("Читатель не найден");
-        }
-
-        Reader reader = readerOpt.get();
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new RuntimeException("Книга не найдена"));
+        Reader reader = readerRepository.findById(readerId)
+                .orElseThrow(() -> new RuntimeException("Читатель не найден"));
 
         if (reader.isBlocked()) {
-            throw new RuntimeException("Читатель заблокирован. Оплатите штрафы.");
+            throw new RuntimeException("Читатель заблокирован");
         }
 
-        double unpaidFines = storage.getTotalUnpaidFinesByReader(readerId);
+        double unpaidFines = fineRepository.findByReaderIdAndStatus(readerId, "UNPAID")
+                .stream().mapToDouble(Fine::getAmount).sum();
         if (unpaidFines > 0) {
-            throw new RuntimeException("У читателя есть непогашенные штрафы: " + unpaidFines + " руб.");
+            throw new RuntimeException("Есть непогашенные штрафы: " + unpaidFines + " руб.");
         }
-
-        Optional<Book> bookOpt = storage.findBookById(bookId);
-        Book book = bookOpt.get();
 
         if (!book.isAvailable()) {
-            throw new RuntimeException("Нет доступных экземпляров книги");
+            throw new RuntimeException("Нет доступных экземпляров");
         }
 
-        long activeLoans = storage.findBookLoansByReaderId(readerId).stream()
-                .filter(loan -> loan.getReturnDate() == null)
-                .count();
-
-        if (activeLoans >= 5) {
-            throw new RuntimeException("Читатель уже имеет 5 активных книг. Верните хотя бы одну.");
+        long activeLoans = bookLoanRepository.findActiveLoansByReaderId(readerId).size();
+        if (activeLoans >= MAX_ACTIVE_LOANS) {
+            throw new RuntimeException("Максимум " + MAX_ACTIVE_LOANS + " книг");
         }
-
-        BookLoan loan = new BookLoan(null, bookId, readerId);
-        storage.saveBookLoan(loan);
 
         book.borrowCopy();
-        storage.saveBook(book);
+        bookRepository.save(book);
 
-        reader.addBookLoan(loan.getId());
-        storage.saveReader(reader);
+        BookLoan loan = BookLoan.builder()
+                .book(book)
+                .reader(reader)
+                .loanDate(LocalDate.now())
+                .dueDate(LocalDate.now().plusDays(14))
+                .status("ACTIVE")
+                .build();
 
-        return loan;
+        return bookLoanRepository.save(loan);
     }
 
+    @Transactional
     public BookLoan returnBook(Long loanId) {
-        Optional<BookLoan> loanOpt = storage.findBookLoanById(loanId);
-        if (loanOpt.isEmpty()) {
-            throw new RuntimeException("Выдача не найдена");
-        }
-
-        BookLoan loan = loanOpt.get();
+        BookLoan loan = bookLoanRepository.findById(loanId)
+                .orElseThrow(() -> new RuntimeException("Выдача не найдена"));
 
         if (loan.getReturnDate() != null) {
             throw new RuntimeException("Книга уже возвращена");
@@ -78,50 +79,81 @@ public class BookLoanService {
             long daysOverdue = loan.getDaysOverdue();
             double fineAmount = daysOverdue * FINE_PER_DAY;
 
-            Fine fine = new Fine(null, loan.getReaderId(), loanId, fineAmount, "OVERDUE");
-            storage.saveFine(fine);
+            Fine fine = Fine.builder()
+                    .reader(loan.getReader())
+                    .bookLoan(loan)
+                    .amount(fineAmount)
+                    .reason("OVERDUE")
+                    .status("UNPAID")
+                    .build();
+            fineRepository.save(fine);
 
-            Optional<Reader> readerOpt = storage.findReaderById(loan.getReaderId());
-            readerOpt.ifPresent(reader -> {
-                reader.addFine(fine.getId());
-                storage.saveReader(reader);
-            });
+            Reader reader = loan.getReader();
+            double totalUnpaid = fineRepository.findByReaderIdAndStatus(reader.getId(), "UNPAID")
+                    .stream().mapToDouble(Fine::getAmount).sum();
+
+            if (totalUnpaid > blockThreshold) {
+                reader.setBlocked(true);
+                readerRepository.save(reader);
+            }
         }
 
-        loan.setStatus("RETURNED");
-        storage.saveBookLoan(loan);
+        Book book = loan.getBook();
+        book.returnCopy();
+        bookRepository.save(book);
 
-        Optional<Book> bookOpt = storage.findBookById(loan.getBookId());
-        bookOpt.ifPresent(book -> {
-            book.returnCopy();
-            storage.saveBook(book);
-        });
-
-        return loan;
+        return bookLoanRepository.save(loan);
     }
 
-    public void payFine(Long fineId) {
-        Optional<Fine> fineOpt = storage.findFineById(fineId);
-        if (fineOpt.isEmpty()) {
-            throw new RuntimeException("Штраф не найден");
-        }
-
-        Fine fine = fineOpt.get();
+    @Transactional
+    public Fine payFine(Long fineId) {
+        Fine fine = fineRepository.findById(fineId)
+                .orElseThrow(() -> new RuntimeException("Штраф не найден"));
 
         if (fine.isPaid()) {
             throw new RuntimeException("Штраф уже оплачен");
         }
 
         fine.pay();
-        storage.saveFine(fine);
+        fine = fineRepository.save(fine);
 
-        Optional<Reader> readerOpt = storage.findReaderById(fine.getReaderId());
-        readerOpt.ifPresent(reader -> {
-            double unpaid = storage.getTotalUnpaidFinesByReader(reader.getId());
-            if (unpaid == 0 && reader.isBlocked()) {
-                reader.setBlocked(false);
-                storage.saveReader(reader);
-            }
-        });
+        Reader reader = fine.getReader();
+        double unpaidFines = fineRepository.findByReaderIdAndStatus(reader.getId(), "UNPAID")
+                .stream().mapToDouble(Fine::getAmount).sum();
+
+        if (unpaidFines == 0 && reader.isBlocked()) {
+            reader.setBlocked(false);
+            readerRepository.save(reader);
+        }
+
+        return fine;
+    }
+
+    @Transactional
+    public BookLoan renewBook(Long loanId) {
+        BookLoan loan = bookLoanRepository.findById(loanId)
+                .orElseThrow(() -> new RuntimeException("Выдача не найдена"));
+
+        if (loan.getReturnDate() != null) {
+            throw new RuntimeException("Книга уже возвращена");
+        }
+
+        if (loan.isOverdue()) {
+            throw new RuntimeException("Нельзя продлить просроченную книгу");
+        }
+
+        LocalDate newDueDate = loan.getDueDate().plusDays(14);
+        loan.setDueDate(newDueDate);
+
+        return bookLoanRepository.save(loan);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Reader> getDebtors() {
+        List<BookLoan> overdueLoans = bookLoanRepository.findByStatus("OVERDUE");
+        return overdueLoans.stream()
+                .map(BookLoan::getReader)
+                .distinct()
+                .toList();
     }
 }

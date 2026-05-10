@@ -1,66 +1,80 @@
 package ru.mfa.controller;
 
-import ru.mfa.model.Reader;
-import ru.mfa.repository.InMemoryStorage;
+import ru.mfa.entity.BookLoan;
+import ru.mfa.entity.Fine;
+import ru.mfa.entity.Reader;
+import ru.mfa.repository.ReaderRepository;
+import ru.mfa.repository.FineRepository;
 import ru.mfa.service.BookLoanService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/readers")
+@RequiredArgsConstructor
 public class ReaderController {
-    private final InMemoryStorage storage = InMemoryStorage.getInstance();
-    private final BookLoanService loanService = new BookLoanService();
+
+    private final ReaderRepository readerRepository;
+    private final FineRepository fineRepository;
+    private final BookLoanService bookLoanService;
 
     @PostMapping
     public Reader createReader(@RequestBody Reader reader) {
-        return storage.saveReader(reader);
+        return readerRepository.save(reader);
     }
 
     @GetMapping
     public List<Reader> getAllReaders() {
-        return storage.findAllReaders();
+        return readerRepository.findAll();
     }
 
     @GetMapping("/{id}")
     public Reader getReaderById(@PathVariable Long id) {
-        return storage.findReaderById(id)
+        return readerRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Читатель не найден"));
     }
 
     @PutMapping("/{id}")
     public Reader updateReader(@PathVariable Long id, @RequestBody Reader reader) {
-        if (!storage.existsReaderById(id)) {
+        if (!readerRepository.existsById(id)) {
             throw new RuntimeException("Читатель не найден");
         }
         reader.setId(id);
-        return storage.saveReader(reader);
+        return readerRepository.save(reader);
     }
 
     @DeleteMapping("/{id}")
     public String deleteReader(@PathVariable Long id) {
-        if (!storage.existsReaderById(id)) {
+        if (!readerRepository.existsById(id)) {
             throw new RuntimeException("Читатель не найден");
         }
-        storage.deleteReaderById(id);
-        return "Читатель с ID " + id + " удалён";
+        readerRepository.deleteById(id);
+        return "Читатель удалён";
     }
 
     @PostMapping("/{readerId}/borrow/{bookId}")
-    public String borrowBook(@PathVariable Long readerId, @PathVariable Long bookId) {
-        loanService.borrowBook(bookId, readerId);
-        return "Книга выдана читателю";
+    public BookLoan borrowBook(@PathVariable Long readerId, @PathVariable Long bookId) {
+        return bookLoanService.borrowBook(bookId, readerId);
     }
 
-    @PostMapping("/{readerId}/return/{loanId}")
-    public String returnBook(@PathVariable Long readerId, @PathVariable Long loanId) {
-        loanService.returnBook(loanId);
-        return "Книга возвращена";
+    @PostMapping("/return/{loanId}")
+    public BookLoan returnBook(@PathVariable Long loanId) {
+        return bookLoanService.returnBook(loanId);
+    }
+
+    @PostMapping("/renew/{loanId}")
+    public BookLoan renewBook(@PathVariable Long loanId) {
+        return bookLoanService.renewBook(loanId);
     }
 
     @GetMapping("/{readerId}/fines")
-    public List<?> getReaderFines(@PathVariable Long readerId) {
-        return storage.findFinesByReaderId(readerId);
+    public List<Fine> getReaderFines(@PathVariable Long readerId) {
+        return fineRepository.findByReaderId(readerId);
+    }
+
+    @GetMapping("/debtors")
+    public List<Reader> getDebtors() {
+        return bookLoanService.getDebtors();
     }
 }

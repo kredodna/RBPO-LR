@@ -1,0 +1,124 @@
+@baseUrl = http://localhost:8080/api
+@bookId = 8
+@author1Id = 7
+@author2Id = 8
+@readerId = 6
+@loanId = 6
+@fineId = 8
+
+### В библиотеку поступает новая книга двух новых авторов, позже поступает ещё один экземпляр книги
+
+### Добавление первого автора
+POST {{baseUrl}}/authors
+Content-Type: application/json
+
+{
+  "firstName": "Павел",
+  "lastName": "Милюков"
+}
+
+### Добавление второго автора
+
+POST {{baseUrl}}/authors
+Content-Type: application/json
+
+{
+  "firstName": "Константин",
+  "lastName": "Яук"
+}
+
+### Добавление новой книги
+POST {{baseUrl}}/books
+Content-Type: application/json
+
+{
+  "title": "Я - калибр 10",
+  "publicationYear": 2010,
+  "totalCopies": 1
+}
+
+### Добавление связи между книгой и первым автором
+POST {{baseUrl}}/books/{{bookId}}/author/{{author1Id}}
+
+### Добавление связи между книгой и вторым автором
+POST {{baseUrl}}/books/{{bookId}}/author/{{author2Id}}
+
+### Добавление второго экземпляра книги
+PUT {{baseUrl}}/books/{{bookId}}
+Content-Type: application/json
+
+{
+  "title": "Я - калибр 10",
+  "publicationYear": 2010,
+  "totalCopies": 2
+}
+
+### В библиотеку приходит новый читателль и берет книгу
+
+### Добавление нового читателя
+POST {{baseUrl}}/readers
+Content-Type: application/json
+
+{
+  "firstName": "Сергей",
+  "lastName": "Горемыко",
+  "email": "Sergey@mail.ru",
+  "phone": "+7-999-888-7777"
+}
+
+### Читатель берет книгу
+POST {{baseUrl}}/readers/{{readerId}}/borrow/{{bookId}}
+
+### Позже читатель просит продлить срок выдачи
+POST {{baseUrl}}/readers/renew/{{loanId}}
+
+### Читатель возвращает книгу, но она повреждена,
+### в связи с чем ему назначается штраф, который он сразу оплачивает
+
+### Назначение штрафа
+POST {{baseUrl}}/fines
+Content-Type: application/json
+
+{
+  "readerId": {{readerId}},
+  "bookLoanId": {{loanId}},
+  "amount": 100,
+  "reason": "DAMAGE"
+}
+
+### Оплата штрафа
+POST {{baseUrl}}/fines/{{fineId}}/pay
+
+### Возврат книги
+POST {{baseUrl}}/readers/return/{{loanId}}
+
+### Проверка появления авторов и книги
+GET {{baseUrl}}/books/{{bookId}}/authors
+
+### Проверка появления читателя
+GET {{baseUrl}}/readers/{{readerId}}
+
+### Проверка появления и оплаты штрафа
+GET {{baseUrl}}/fines/{{fineId}}
+
+### Удаление штрафа
+
+DELETE {{baseUrl}}/fines/{{fineId}}
+
+### Удаление связи авторы-книга
+DELETE {{baseUrl}}/books/{{bookId}}/author/{{author1Id}}
+
+### Удаление связи авторы-книга
+DELETE {{baseUrl}}/books/{{bookId}}/author/{{author2Id}}
+
+### Удаление авторов
+DELETE {{baseUrl}}/authors/{{author1Id}}
+
+### Удаление авторов
+DELETE {{baseUrl}}/authors/{{author2Id}}
+
+### Удаление книги
+DELETE {{baseUrl}}/books/{{bookId}}
+
+### Удаление читателя
+DELETE {{baseUrl}}/readers/{{readerId}}
