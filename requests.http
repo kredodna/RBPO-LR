@@ -1,0 +1,181 @@
+### =====================================================
+###                      БИБЛИОТЕКА
+### =====================================================
+
+### Переменные
+@baseUrl = http://localhost:8080/api
+@bookId = 1
+@authorId = 1
+@readerId = 1
+@loanId = 1
+@fineId = 1
+
+### КНИГИ
+
+### Создать книгу
+POST {{baseUrl}}/books
+Content-Type: application/json
+
+{
+    "title": "Мастер и Маргарита",
+    "publicationYear": 1967,
+    "totalCopies": 5
+}
+
+### Получить все книги
+GET {{baseUrl}}/books
+
+### Получить книгу по ID
+GET {{baseUrl}}/books/{{bookId}}
+
+### Получить доступные книги
+GET {{baseUrl}}/books/available
+
+### Обновить книгу
+PUT {{baseUrl}}/books/{{bookId}}
+Content-Type: application/json
+
+{
+    "title": "Война и мир",
+    "publicationYear": 1869,
+    "totalCopies": 5
+}
+
+### Связать книгу с автором
+POST {{baseUrl}}/books/{{bookId}}/author/{{authorId}}
+
+### Получить всех авторов книги
+GET {{baseUrl}}/books/{{bookId}}/authors
+
+### Удалить связь книги с автором
+DELETE {{baseUrl}}/books/{{bookId}}/author/{{authorId}}
+
+### Удалить книгу
+DELETE {{baseUrl}}/books/{{bookId}}
+
+### АВТОРЫ
+
+### Создать автора
+POST {{baseUrl}}/authors
+Content-Type: application/json
+
+{
+    "firstName": "Михаил",
+    "lastName": "Булгаков"
+}
+
+### Получить всех авторов
+GET {{baseUrl}}/authors
+
+### Получить автора по ID
+GET {{baseUrl}}/authors/{{authorId}}
+
+### Обновить автора
+PUT {{baseUrl}}/authors/{{authorId}}
+Content-Type: application/json
+
+{
+    "firstName": "Лев",
+    "lastName": "Толстой"
+}
+
+### Удалить автора
+DELETE {{baseUrl}}/authors/{{authorId}}
+
+### ЧИТАТЕЛИ
+
+### Создать читателя
+POST {{baseUrl}}/readers
+Content-Type: application/json
+
+{
+    "firstName": "Дмитрий",
+    "lastName": "Смирнов",
+    "email": "dmitry@mail.ru",
+    "phone": "+7-999-111-2233",
+    "blocked": false
+}
+
+### Получить всех читателей
+GET {{baseUrl}}/readers
+
+### Получить читателя по ID
+GET {{baseUrl}}/readers/{{readerId}}
+
+### Получить штрафы читателя
+GET {{baseUrl}}/readers/{{readerId}}/fines
+
+### Получить должников
+GET {{baseUrl}}/readers/debtors
+
+### Обновить читателя
+PUT {{baseUrl}}/readers/{{readerId}}
+Content-Type: application/json
+
+{
+    "firstName": "Иван",
+    "lastName": "Петров",
+    "email": "ivan.new@mail.ru",
+    "phone": "+7-999-123-4567",
+    "blocked": false
+}
+
+### Удалить читателя
+DELETE {{baseUrl}}/readers/{{readerId}}
+
+###ШТРАФЫ
+
+### Создать штраф
+POST {{baseUrl}}/fines
+Content-Type: application/json
+
+{
+    "readerId": 2,
+    "bookLoanId": 2,
+    "amount": 100,
+    "reason": "DAMAGE"
+}
+
+### Получить все штрафы
+GET {{baseUrl}}/fines
+
+### Получить штраф по ID
+GET {{baseUrl}}/fines/{{fineId}}
+
+### Получить непогашенные штрафы
+GET {{baseUrl}}/fines/unpaid
+
+### Получить штрафы читателя
+GET {{baseUrl}}/fines/reader/{{readerId}}
+
+### Обновить штраф
+PUT {{baseUrl}}/fines/{{fineId}}
+Content-Type: application/json
+
+{
+    "amount": 150,
+    "reason": "OVERDUE"
+}
+
+### Оплатить штраф
+POST {{baseUrl}}/fines/{{fineId}}/pay
+
+### Удалить штраф
+DELETE {{baseUrl}}/fines/{{fineId}}
+
+### БИЗНЕС-ОПЕРАЦИИ
+
+### Выдать книгу читателю
+POST {{baseUrl}}/readers/{{readerId}}/borrow/{{bookId}}
+
+### Вернуть книгу
+POST {{baseUrl}}/readers/return/{{loanId}}
+
+### Продлить книгу
+POST {{baseUrl}}/readers/renew/{{loanId}}
+
+### Оплатить штраф (через сервис штрафов)
+POST {{baseUrl}}/fines/{{fineId}}/pay
+
+### Получить список должников
+GET {{baseUrl}}/readers/debtors

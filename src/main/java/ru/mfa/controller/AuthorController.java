@@ -1,47 +1,49 @@
 package ru.mfa.controller;
 
-import ru.mfa.model.Author;
-import ru.mfa.repository.InMemoryStorage;
+import ru.mfa.entity.Author;
+import ru.mfa.repository.AuthorRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/authors")
+@RequiredArgsConstructor
 public class AuthorController {
 
-    private final InMemoryStorage storage = InMemoryStorage.getInstance();
+    private final AuthorRepository authorRepository;
 
     @PostMapping
     public Author createAuthor(@RequestBody Author author) {
-        return storage.saveAuthor(author);
+        return authorRepository.save(author);
     }
 
     @GetMapping
     public List<Author> getAllAuthors() {
-        return storage.findAllAuthors();
+        return authorRepository.findAll();
     }
 
     @GetMapping("/{id}")
     public Author getAuthorById(@PathVariable Long id) {
-        return storage.findAuthorById(id)
+        return authorRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Автор не найден"));
     }
 
     @PutMapping("/{id}")
     public Author updateAuthor(@PathVariable Long id, @RequestBody Author author) {
-        if (!storage.existsAuthorById(id)) {
+        if (!authorRepository.existsById(id)) {
             throw new RuntimeException("Автор не найден");
         }
         author.setId(id);
-        return storage.saveAuthor(author);
+        return authorRepository.save(author);
     }
 
     @DeleteMapping("/{id}")
     public String deleteAuthor(@PathVariable Long id) {
-        if (!storage.existsAuthorById(id)) {
+        if (!authorRepository.existsById(id)) {
             throw new RuntimeException("Автор не найден");
         }
-        storage.deleteAuthorById(id);
+        authorRepository.deleteById(id);
         return "Автор удалён";
     }
 }
